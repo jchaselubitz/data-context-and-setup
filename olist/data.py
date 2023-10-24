@@ -7,10 +7,11 @@ Its keys should be 'sellers', 'orders', 'order_items' etc...
 Its values should be pandas.DataFrames loaded from csv files
 """
 
+csv_path = os.path.join(os.environ["PYTHONPATH"][:-1], "data", "csv")
+
 
 class Olist:
     def get_data(self):
-        csv_path = os.path.join("..", "data-context-and-setup", "data", "csv")
         file_names = os.listdir(csv_path)
         data = {}
         for name in file_names:
@@ -29,4 +30,4 @@ class Olist:
 
 
 if __name__ == "__main__":
-    print("file_location", os.getcwd())
+    print("csv_path", csv_path)
