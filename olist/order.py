@@ -24,6 +24,7 @@ class Order:
         orders = self.data["orders"].copy()
 
         # Hint: Within this instance method, you have access to the instance of the class Order in the variable self, as well as all its attributes
+        one_day = np.timedelta64(24, "h")
         orders.order_delivered_customer_date = pd.to_datetime(
             orders.order_delivered_customer_date
         )
@@ -51,11 +52,10 @@ class Order:
         )
 
         delay_vs_expected = orders_w_expected_wait_time.copy()
-        delay_vs_expected[
-            "delay_vs_expected"
-        ] = (
+        delay_vs_expected["delay_vs_expected"] = (
             orders_w_expected_wait_time.wait_time
-        ) = orders_w_expected_wait_time.expected_wait_time
+            - orders_w_expected_wait_time.expected_wait_time
+        ) / one_day
 
         return delay_vs_expected[
             [
@@ -138,5 +138,33 @@ class Order:
         'order_status', 'dim_is_five_star', 'dim_is_one_star', 'review_score',
         'number_of_products', 'number_of_sellers', 'price', 'freight_value',
         'distance_seller_customer']
+
         """
-        # Hint: make sure to re-use your instance methods defined above
+        orders = self.data["orders"].copy()
+
+        a = pd.merge(orders, self.get_wait_time())
+        b = pd.merge(a, self.get_review_score())
+        c = pd.merge(b, self.get_number_products())
+        d = pd.merge(c, self.get_price_and_freight())
+        e = pd.merge(d, self.get_number_sellers())
+        print(e)
+
+        e[
+            [
+                "order_id",
+                "wait_time",
+                "expected_wait_time",
+                "delay_vs_expected",
+                "order_status",
+                "dim_is_five_star",
+                "dim_is_one_star",
+                "review_score",
+                "number_of_products",
+                "price",
+                "freight_value",
+                # "number_sellers",
+            ]
+        ]
+
+
+# Hint: make sure to re-use your instance methods defined above
