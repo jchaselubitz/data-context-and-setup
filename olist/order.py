@@ -115,7 +115,14 @@ class Order:
         Returns a DataFrame with:
         order_id, price, freight_value
         """
-        # sellers = self.data["sellers"].copy()
+
+        price_and_freight = self.data["order_items"].copy()
+        price_and_freight.groupby("order_id").sum()
+        return (
+            price_and_freight.groupby("order_id")
+            .sum()[["price", "freight_value"]]
+            .reset_index()
+        )
 
     # Optional
     def get_distance_seller_customer(self):
@@ -123,8 +130,6 @@ class Order:
         Returns a DataFrame with:
         order_id, distance_seller_customer
         """
-        sellers = self.data["sellers"].copy()
-        customers = self.data["customers"].copy()
 
     def get_training_data(self, is_delivered=True, with_distance_seller_customer=False):
         """
