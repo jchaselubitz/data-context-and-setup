@@ -105,14 +105,25 @@ class Product:
         ].drop_duplicates()
         df = orders_products.merge(orders_reviews, on="order_id")
 
-        df["cost_of_reviews"] = df.review_score.map({1: 100, 2: 50, 3: 40, 4: 0, 5: 0})
+        df.groupby("order_id")["product_id"].count().reset_index()["product_id"]
+
+        df["product_count"] = (
+            df.groupby("order_id")["product_id"].count().reset_index()["product_id"]
+        )
+
+        df["total_cost_of_review"] = df.review_score.map(
+            {1: 100, 2: 50, 3: 40, 4: 0, 5: 0}
+        )
+
+        df["spread_cost_of_review"] = df["total_cost_of_review"] / df["product_count"]
 
         df = df.groupby("product_id", as_index=False).agg(
             {
                 "dim_is_one_star": "mean",
                 "dim_is_five_star": "mean",
                 "review_score": "mean",
-                "cost_of_reviews": "sum",
+                "spread_cost_of_review": "sum",
+                "total_cost_of_review": "sum",
             }
         )
         df.columns = [
@@ -120,19 +131,21 @@ class Product:
             "share_of_one_stars",
             "share_of_five_stars",
             "review_score",
-            "cost_of_reviews",
+            "spread_cost_of_review",
+            "total_cost_of_review",
         ]
 
         return df
 
-    def get_training_data(self):
+    def get_training_data(self, spread_review_penalty=False):
         """
         Returns a DataFrame with:
         ['product_id', 'product_name_length', 'product_description_length',
         'product_photos_qty', 'product_weight_g', 'product_length_cm',
         'product_height_cm', 'product_width_cm', 'category', 'wait_time',
         'price', 'share_of_one_stars', 'share_of_five_stars', 'review_score',
-        'cost_of_reviews', 'n_orders', 'quantity', 'sales', 'revenues',
+         "total_cost_of_review",
+            "spread_cost_of_review", 'n_orders', 'quantity', 'sales', 'revenues',
         'profits']
         """
         training_set = (
@@ -145,21 +158,26 @@ class Product:
         )
 
         # compute the economics (revenues, profits)
+
+        cost_of_reviews = (
+            training_set["spread_cost_of_review"]
+            if spread_review_penalty
+            else training_set["total_cost_of_review"]
+        )
+
         olist_sales_cut = 0.1
         training_set["revenues"] = olist_sales_cut * training_set["sales"]
-        training_set["profits"] = (
-            training_set["revenues"] - training_set["cost_of_reviews"]
-        )
+        training_set["profits"] = training_set["revenues"] - cost_of_reviews
         return training_set
 
-    def get_product_cat(self, agg="mean"):
+    def get_product_cat(self, spread_review_penalty=False, agg="mean"):
         """
         Returns a DataFrame with `category` as index, and aggregating various properties for each category in columns such as:
         - `quantity`: total number of products sold for this category.
         - `product_weight_g`: mean or median weight per category
         - ...
         """
-        products = self.get_training_data()
+        products = self.get_training_data(spread_review_penalty)
 
         columns = list(products.select_dtypes(exclude=["object"]).columns)
         agg_params = dict(zip(columns, [agg] * len(columns)))
