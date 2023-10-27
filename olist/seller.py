@@ -1,3 +1,6 @@
+# TO CONTENT CREATORS: MIRROR UPDATES OF THIS FILE INTO
+# -`olist/seller.py`
+# - `olist/seller_updated.py`
 import pandas as pd
 import numpy as np
 from olist.data import Olist
@@ -137,52 +140,81 @@ class Seller:
     def get_review_score(self):
         """
         Returns a DataFrame with:
-        'seller_id', 'share_of_five_stars', 'share_of_one_stars', 'review_score'
+        'seller_id', 'share_of_five_stars', 'share_of_one_stars', 'review_score', 'cost_of_reviews'
         """
-
-        # $CHALLENGIFY_BEGIN
         orders_reviews = self.order.get_review_score()
         orders_sellers = self.data["order_items"][
             ["order_id", "seller_id"]
         ].drop_duplicates()
 
         df = orders_sellers.merge(orders_reviews, on="order_id")
-        res = df.groupby("seller_id", as_index=False).agg(
+
+        df.groupby("order_id")["seller_id"].count().reset_index()["seller_id"]
+
+        df["seller_count"] = (
+            df.groupby("order_id")["seller_id"].count().reset_index()["seller_id"]
+        )
+
+        df["total_cost_of_review"] = df.review_score.map(
+            {1: 100, 2: 50, 3: 40, 4: 0, 5: 0}
+        )
+
+        df["spread_cost_of_review"] = df["total_cost_of_review"] / df["seller_count"]
+
+        df_grouped_by_sellers = df.groupby("seller_id", as_index=False).agg(
             {
                 "dim_is_one_star": "mean",
                 "dim_is_five_star": "mean",
                 "review_score": "mean",
+                "total_cost_of_review": "sum",
+                "spread_cost_of_review": "sum",
             }
         )
-        # Rename columns
-        res.columns = [
+        df_grouped_by_sellers.columns = [
             "seller_id",
             "share_of_one_stars",
             "share_of_five_stars",
             "review_score",
+            "total_cost_of_review",
+            "spread_cost_of_review",
         ]
 
-        return res
-        # $CHALLENGIFY_END
+        return df_grouped_by_sellers
 
-    def get_training_data(self):
+    def get_training_data(self, spread_review_penalty=False):
         """
         Returns a DataFrame with:
         ['seller_id', 'seller_city', 'seller_state', 'delay_to_carrier',
-        'wait_time', 'date_first_sale', 'date_last_sale', 'months_on_olist', 'share_of_one_stars',
-        'share_of_five_stars', 'review_score', 'n_orders', 'quantity',
-        'quantity_per_order', 'sales']
+        'wait_time', 'date_first_sale', 'date_last_sale', 'months_on_olist',
+        'share_of_one_stars', 'share_of_five_stars', 'review_score',
+           "total_cost_of_review",
+            "spread_cost_of_review", 'n_orders', 'quantity', 'quantity_per_order',
+        'sales', 'revenues', 'profits']
         """
-
         training_set = (
             self.get_seller_features()
             .merge(self.get_seller_delay_wait_time(), on="seller_id")
             .merge(self.get_active_dates(), on="seller_id")
+            .merge(self.get_review_score(), on="seller_id")
             .merge(self.get_quantity(), on="seller_id")
             .merge(self.get_sales(), on="seller_id")
         )
 
-        if self.get_review_score() is not None:
-            training_set = training_set.merge(self.get_review_score(), on="seller_id")
+        # Add seller economics (revenues, profits)
+        olist_monthly_fee = 80
+        olist_sales_cut = 0.1
+
+        training_set["revenues"] = (
+            training_set["months_on_olist"] * olist_monthly_fee
+            + olist_sales_cut * training_set["sales"]
+        )
+
+        cost_of_reviews = (
+            training_set["spread_cost_of_review"]
+            if spread_review_penalty
+            else training_set["total_cost_of_review"]
+        )
+
+        training_set["profits"] = training_set["revenues"] - cost_of_reviews
 
         return training_set
